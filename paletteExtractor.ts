@@ -19,7 +19,7 @@ function rgbDistance(a: Rgb, b: Rgb): number {
   return (a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2;
 }
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -35,14 +35,22 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
+function loadImageFromUrl(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not load that image."));
+    img.src = url;
+  });
+}
+
 /**
- * Extracts a small, visually distinct palette from an image file by
+ * Extracts a small, visually distinct palette from an image element by
  * downscaling it, bucketing pixels into coarse color cells, and picking
  * the most common cells that are still far enough apart to look distinct.
  */
-export async function extractPalette(file: File, count = 5): Promise<Swatch[]> {
-  const img = await loadImage(file);
-
+function extractPaletteFromImage(img: HTMLImageElement, count: number): Swatch[] {
   const maxDim = 200;
   const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
   const width = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -102,4 +110,19 @@ export async function extractPalette(file: File, count = 5): Promise<Swatch[]> {
     const hex = rgbToHex(c.r, c.g, c.b);
     return { hex, name: nearestColorName(hex) };
   });
+}
+
+/** Extracts a palette from a user-provided image file (e.g. from a file input or drop). */
+export async function extractPalette(file: File, count = 5): Promise<Swatch[]> {
+  const img = await loadImageFromFile(file);
+  return extractPaletteFromImage(img, count);
+}
+
+/**
+ * Extracts a palette from a remote image URL. The source must serve
+ * permissive CORS headers or the canvas read will be blocked by the browser.
+ */
+export async function extractPaletteFromUrl(url: string, count = 5): Promise<Swatch[]> {
+  const img = await loadImageFromUrl(url);
+  return extractPaletteFromImage(img, count);
 }

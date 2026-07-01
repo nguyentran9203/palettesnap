@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Image as ImageIcon, RotateCcw, Sparkles, UploadCloud, Wand2, Download } from "lucide-react";
-import { extractPalette, type Swatch } from "./paletteExtractor";
+import { extractPalette, extractPaletteFromUrl, type Swatch } from "./paletteExtractor";
 import { downloadPaletteAsPng } from "./paletteImage";
-import { generateInstagramTips } from "./instagramTips";
+import { getGridInsights } from "./instagramTips";
 
 declare global {
   interface Window {
@@ -351,8 +351,9 @@ function Hero({ swatches, fileName, isDemo, status, error, setStatus, setError, 
   );
 }
 
-function InstagramTips({ swatches }: { swatches: Swatch[] }) {
-  const tips = useMemo(() => generateInstagramTips(swatches), [swatches]);
+function InstagramGridPreview({ swatches }: { swatches: Swatch[] }) {
+  const insights = useMemo(() => getGridInsights(swatches), [swatches]);
+  const tiles = useMemo(() => Array.from({ length: 9 }, (_, i) => swatches[i] ?? null), [swatches]);
 
   return (
     <section id="instagram" className="border-t border-[var(--ps-line)] bg-white">
@@ -362,20 +363,28 @@ function InstagramTips({ swatches }: { swatches: Swatch[] }) {
           <h2 className="font-display mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
             Lay out your feed around this palette.
           </h2>
-          <p className="mt-4 text-[var(--ps-muted)]">
-            A few ways to arrange posts around these exact colors instead of dropping them in at random.
-          </p>
         </div>
-        <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2">
-          {tips.map((tip, i) => (
-            <div
-              key={i}
-              className="ps-grid-item flex gap-4 rounded-xl border border-[var(--ps-line)] bg-[var(--ps-paper)] p-5"
-            >
-              <span className="font-mono text-xs text-[var(--ps-muted)]">{String(i + 1).padStart(2, "0")}</span>
-              <p className="text-sm leading-relaxed text-[var(--ps-ink)]">{tip}</p>
+        <div className="ps-reveal mt-10 grid grid-cols-1 items-center gap-10 md:grid-cols-2">
+          <div className="mx-auto w-full max-w-sm overflow-hidden rounded-3xl border border-[var(--ps-line)] bg-white p-4 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.12)]">
+            <div className="grid grid-cols-3 gap-1">
+              {tiles.map((s, i) => (
+                <div
+                  key={i}
+                  className="aspect-square rounded-[3px]"
+                  style={{ background: s ? s.hex : "var(--ps-paper)" }}
+                />
+              ))}
             </div>
-          ))}
+          </div>
+          <div>
+            <p className="text-lg leading-relaxed text-[var(--ps-ink)]">
+              {insights?.caption ?? "Upload a photo above to see a suggested grid built from its colors."}
+            </p>
+            <p className="mt-4 text-sm text-[var(--ps-muted)]">
+              The colored tiles above are seeded straight from your palette — the rest of
+              the grid stays open for the photos you actually post.
+            </p>
+          </div>
         </div>
       </div>
     </section>
@@ -414,6 +423,74 @@ function HowItWorks() {
   );
 }
 
+const SHOWCASE_PHOTO_URL =
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1000&q=80";
+
+const SHOWCASE_FALLBACK_PALETTE: Swatch[] = [
+  { hex: "#A7C6D2", name: "Cloud Blue" },
+  { hex: "#C09375", name: "Camel" },
+  { hex: "#D8D6D5", name: "Mint Whisper" },
+  { hex: "#D4BCA8", name: "Blush" },
+  { hex: "#918B7B", name: "Muted Clay" },
+];
+
+function PhotoToPaletteShowcase() {
+  const [swatches, setSwatches] = useState<Swatch[]>(SHOWCASE_FALLBACK_PALETTE);
+  const [photoFailed, setPhotoFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    extractPaletteFromUrl(SHOWCASE_PHOTO_URL, 5)
+      .then((result) => {
+        if (!cancelled && result.length > 0) setSwatches(result);
+      })
+      .catch(() => {
+        // Keep the fallback palette if the photo can't be read (e.g. blocked by CORS).
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="ps-reveal mt-12 flex flex-col items-center gap-8 rounded-2xl border border-[var(--ps-line)] bg-white p-6 sm:p-10 md:flex-row">
+      <div className="w-full max-w-xs flex-none -rotate-2 rounded-lg border border-[var(--ps-line)] bg-white p-2 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.25)]">
+        {photoFailed ? (
+          <div className="flex aspect-square w-full items-center justify-center rounded-sm bg-[var(--ps-paper)] text-xs text-[var(--ps-muted)]">
+            Photo unavailable
+          </div>
+        ) : (
+          <img
+            src={SHOWCASE_PHOTO_URL}
+            alt="Beach chairs and an umbrella under palm leaves"
+            className="aspect-square w-full rounded-sm object-cover"
+            onError={() => setPhotoFailed(true)}
+          />
+        )}
+      </div>
+      <ArrowRight className="hidden h-6 w-6 flex-none rotate-90 text-[var(--ps-muted)] md:block md:rotate-0" />
+      <div className="w-full max-w-xs flex-none overflow-hidden rounded-xl border border-[var(--ps-line)]">
+        <div className="flex h-20 overflow-hidden">
+          {swatches.map((s, i) => (
+            <div key={`${s.hex}-${i}`} className="flex-1" style={{ background: s.hex }} />
+          ))}
+        </div>
+        <div className="space-y-2 bg-white p-4">
+          {swatches.map((s, i) => (
+            <div key={`${s.hex}-${i}`} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2.5">
+                <span className="h-3.5 w-3.5 flex-none rounded-[3px] border border-[var(--ps-line)]" style={{ background: s.hex }} />
+                <span className="font-medium">{s.name}</span>
+              </div>
+              <span className="font-mono text-xs uppercase text-[var(--ps-muted)]">{s.hex}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Gallery() {
   return (
     <section id="gallery" className="bg-[var(--ps-paper)]">
@@ -429,6 +506,8 @@ function Gallery() {
             Every palette below was named from a photograph. Yours could be next.
           </p>
         </div>
+
+        <PhotoToPaletteShowcase />
 
         <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {galleryPalettes.map((p) => (
@@ -490,7 +569,7 @@ function HomePage() {
       <Nav />
       <main>
         <Hero {...palette} />
-        <InstagramTips swatches={palette.swatches} />
+        <InstagramGridPreview swatches={palette.swatches} />
         <HowItWorks />
         <Gallery />
       </main>
