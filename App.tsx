@@ -336,7 +336,6 @@ function Hero({
   resetToDemo,
 }: PaletteUpload) {
   const [isDragging, setIsDragging] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openFileDialog = () => fileInputRef.current?.click();
@@ -357,14 +356,10 @@ function Hero({
     pickColorAtPoint(xRatio, yRatio);
   };
 
-  useEffect(() => {
-    if (isDemo) setShowPicker(false);
-  }, [isDemo]);
-
   return (
     <section id="top" className="relative overflow-hidden">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-6 pt-16 pb-20 md:pt-24 md:grid-cols-12 md:gap-8">
-        <div className="md:col-span-7">
+        <div className={isDemo ? "md:col-span-7" : "md:col-span-5"}>
           <div className="ps-reveal inline-flex items-center gap-2 rounded-full border border-[var(--ps-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--ps-muted)]">
             <Sparkles className="h-3.5 w-3.5 text-[var(--ps-ink)]" />
             Named palettes from any photo
@@ -404,7 +399,7 @@ function Hero({
         </div>
 
         {/* Palette card */}
-        <div className="md:col-span-5">
+        <div className={isDemo ? "md:col-span-5" : "md:col-span-7"}>
           <div className="ps-reveal relative">
             <div
               onDragOver={(e) => {
@@ -430,50 +425,14 @@ function Hero({
                 <span className="font-mono text-[11px] text-[var(--ps-muted)]">{fileName}</span>
               </div>
               <div className="p-5">
-                <div className="flex h-44 overflow-hidden rounded-lg">
-                  {swatches.map((s, i) => (
-                    <div
-                      key={`${s.hex}-${i}`}
-                      className="flex-1 transition-[flex] hover:flex-[1.4]"
-                      style={{ background: s.hex }}
-                    />
-                  ))}
-                </div>
-                <div className="mt-4 space-y-2">
-                  {swatches.map((s, i) => (
-                    <div key={`${s.hex}-${i}`} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2.5">
-                        <span className="h-4 w-4 rounded-[3px] border border-[var(--ps-line)]" style={{ background: s.hex }} />
-                        <span className="font-medium">{s.name}</span>
-                      </div>
-                      <span className="font-mono text-xs uppercase text-[var(--ps-muted)]">{s.hex}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  {!isDemo ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowPicker((v) => !v)}
-                      className="text-xs font-medium text-[var(--ps-ink)] underline decoration-[var(--ps-citron)] decoration-2 underline-offset-2 hover:text-[var(--ps-muted)]"
-                    >
-                      {showPicker ? "Hide photo picker" : "Pick colors from the photo"}
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-                  <ColorCountControl count={count} onChange={setColorCount} disabled={status === "loading"} />
-                </div>
-
-                {showPicker && photoUrl && (
-                  <div className="mt-4">
+                {!isDemo && photoUrl ? (
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <div className="relative overflow-hidden rounded-lg border border-[var(--ps-line)]">
                       <img
                         src={photoUrl}
                         alt="Your uploaded photo"
                         onClick={handlePhotoClick}
-                        className="block w-full cursor-crosshair select-none"
+                        className="aspect-square w-full cursor-crosshair select-none object-cover"
                       />
                       {pickPoints.map(
                         (p, i) =>
@@ -489,11 +448,63 @@ function Hero({
                           )
                       )}
                     </div>
-                    <p className="mt-2 text-xs text-[var(--ps-muted)]">
-                      Click anywhere on the photo to sample that exact color. Click a marker to remove it.
-                    </p>
+                    <div>
+                      <div className="flex h-24 overflow-hidden rounded-lg">
+                        {swatches.map((s, i) => (
+                          <div
+                            key={`${s.hex}-${i}`}
+                            className="flex-1 transition-[flex] hover:flex-[1.4]"
+                            style={{ background: s.hex }}
+                          />
+                        ))}
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {swatches.map((s, i) => (
+                          <div key={`${s.hex}-${i}`} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2.5">
+                              <span className="h-4 w-4 flex-none rounded-[3px] border border-[var(--ps-line)]" style={{ background: s.hex }} />
+                              <span className="font-medium">{s.name}</span>
+                            </div>
+                            <span className="font-mono text-xs uppercase text-[var(--ps-muted)]">{s.hex}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    <div className="flex h-44 overflow-hidden rounded-lg">
+                      {swatches.map((s, i) => (
+                        <div
+                          key={`${s.hex}-${i}`}
+                          className="flex-1 transition-[flex] hover:flex-[1.4]"
+                          style={{ background: s.hex }}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {swatches.map((s, i) => (
+                        <div key={`${s.hex}-${i}`} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-4 w-4 rounded-[3px] border border-[var(--ps-line)]" style={{ background: s.hex }} />
+                            <span className="font-medium">{s.name}</span>
+                          </div>
+                          <span className="font-mono text-xs uppercase text-[var(--ps-muted)]">{s.hex}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
+
+                {!isDemo && photoUrl && (
+                  <p className="mt-3 text-xs text-[var(--ps-muted)]">
+                    Click anywhere on the photo to sample that exact color. Click a marker to remove it.
+                  </p>
+                )}
+
+                <div className="mt-4 flex items-center justify-end">
+                  <ColorCountControl count={count} onChange={setColorCount} disabled={status === "loading"} />
+                </div>
 
                 {status === "error" && error && (
                   <p className="mt-4 text-xs text-[#B04A2E]">{error}</p>
