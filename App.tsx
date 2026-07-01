@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Image as ImageIcon, RotateCcw, Sparkles, UploadCloud, Wand2, Download } from "lucide-react";
+import { ArrowRight, Image as ImageIcon, RotateCcw, UploadCloud, Wand2, Download } from "lucide-react";
 import { extractPalette, extractPaletteFromUrl, sampleColorAtPoint, type Swatch } from "./paletteExtractor";
 import { downloadPaletteAsPng } from "./paletteImage";
 import { getGridInsights, sortForCoherentGrid } from "./instagramTips";
@@ -360,11 +360,7 @@ function Hero({
     <section id="top" className="relative overflow-hidden">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-6 pt-16 pb-20 md:pt-24 md:grid-cols-12 md:gap-8">
         <div className={isDemo ? "md:col-span-7" : "md:col-span-5"}>
-          <div className="ps-reveal inline-flex items-center gap-2 rounded-full border border-[var(--ps-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--ps-muted)]">
-            <Sparkles className="h-3.5 w-3.5 text-[var(--ps-ink)]" />
-            Named palettes from any photo
-          </div>
-          <h1 className="ps-reveal font-display mt-6 text-5xl font-semibold leading-[0.98] tracking-tight sm:text-6xl md:text-7xl">
+          <h1 className="ps-reveal font-display text-5xl font-semibold leading-[0.98] tracking-tight sm:text-6xl md:text-7xl">
             Turn a photo into a palette
             <span className="relative inline-block">
               {" "}worth{" "}
