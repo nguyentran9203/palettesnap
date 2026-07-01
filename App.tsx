@@ -154,12 +154,17 @@ function Nav() {
   );
 }
 
+const MIN_COLOR_COUNT = 3;
+const MAX_COLOR_COUNT = 8;
+
 function usePaletteUpload() {
   const [swatches, setSwatches] = useState<Swatch[]>(demoPalette);
   const [fileName, setFileName] = useState("sunset_rooftop.jpg");
   const [isDemo, setIsDemo] = useState(true);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [count, setCount] = useState(5);
+  const lastFileRef = useRef<File | null>(null);
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
@@ -168,10 +173,11 @@ function usePaletteUpload() {
       setError("That doesn't look like an image. Try a JPG, PNG, or WebP.");
       return;
     }
+    lastFileRef.current = file;
     setStatus("loading");
     setError(null);
     try {
-      const extracted = await extractPalette(file, 5);
+      const extracted = await extractPalette(file, count);
       setSwatches(extracted);
       setFileName(file.name);
       setIsDemo(false);
@@ -182,20 +188,89 @@ function usePaletteUpload() {
     }
   };
 
+  const setColorCount = async (next: number) => {
+    const clamped = Math.max(MIN_COLOR_COUNT, Math.min(MAX_COLOR_COUNT, next));
+    setCount(clamped);
+    if (!lastFileRef.current) {
+      setSwatches(demoPalette.slice(0, clamped));
+      return;
+    }
+    setStatus("loading");
+    setError(null);
+    try {
+      const extracted = await extractPalette(lastFileRef.current, clamped);
+      setSwatches(extracted);
+      setStatus("idle");
+    } catch (err) {
+      setStatus("error");
+      setError(err instanceof Error ? err.message : "Something went wrong reading that image.");
+    }
+  };
+
   const resetToDemo = () => {
-    setSwatches(demoPalette);
+    lastFileRef.current = null;
+    setSwatches(demoPalette.slice(0, count));
     setFileName("sunset_rooftop.jpg");
     setIsDemo(true);
     setStatus("idle");
     setError(null);
   };
 
-  return { swatches, fileName, isDemo, status, error, setStatus, setError, handleFile, resetToDemo };
+  return { swatches, fileName, isDemo, status, error, count, setStatus, setError, handleFile, setColorCount, resetToDemo };
 }
 
 type PaletteUpload = ReturnType<typeof usePaletteUpload>;
 
-function Hero({ swatches, fileName, isDemo, status, error, setStatus, setError, handleFile, resetToDemo }: PaletteUpload) {
+function ColorCountControl({
+  count,
+  onChange,
+  disabled,
+}: {
+  count: number;
+  onChange: (next: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-xs uppercase tracking-widest text-[var(--ps-muted)]">Colors</span>
+      <div className="flex items-center gap-1 rounded-full border border-[var(--ps-line)] bg-white p-1">
+        <button
+          type="button"
+          onClick={() => onChange(count - 1)}
+          disabled={disabled || count <= MIN_COLOR_COUNT}
+          aria-label="Fewer colors"
+          className="grid h-6 w-6 place-items-center rounded-full text-sm font-medium text-[var(--ps-ink)] transition-colors hover:bg-[var(--ps-paper)] disabled:opacity-30"
+        >
+          −
+        </button>
+        <span className="w-4 text-center font-mono text-sm text-[var(--ps-ink)]">{count}</span>
+        <button
+          type="button"
+          onClick={() => onChange(count + 1)}
+          disabled={disabled || count >= MAX_COLOR_COUNT}
+          aria-label="More colors"
+          className="grid h-6 w-6 place-items-center rounded-full text-sm font-medium text-[var(--ps-ink)] transition-colors hover:bg-[var(--ps-paper)] disabled:opacity-30"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Hero({
+  swatches,
+  fileName,
+  isDemo,
+  status,
+  error,
+  count,
+  setStatus,
+  setError,
+  handleFile,
+  setColorCount,
+  resetToDemo,
+}: PaletteUpload) {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -298,6 +373,10 @@ function Hero({ swatches, fileName, isDemo, status, error, setStatus, setError, 
                       <span className="font-mono text-xs uppercase text-[var(--ps-muted)]">{s.hex}</span>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-4 flex items-center justify-end">
+                  <ColorCountControl count={count} onChange={setColorCount} disabled={status === "loading"} />
                 </div>
 
                 {status === "error" && error && (
@@ -432,61 +511,73 @@ const SHOWCASE_FALLBACK_PALETTE: Swatch[] = [
   { hex: "#D8D6D5", name: "Mint Whisper" },
   { hex: "#D4BCA8", name: "Blush" },
   { hex: "#918B7B", name: "Muted Clay" },
+  { hex: "#F7F6F2", name: "Bone White" },
+  { hex: "#F2B441", name: "Golden Hour" },
+  { hex: "#0F4C5C", name: "Deep Tyrrhenian" },
 ];
 
 function PhotoToPaletteShowcase() {
   const [swatches, setSwatches] = useState<Swatch[]>(SHOWCASE_FALLBACK_PALETTE);
   const [photoFailed, setPhotoFailed] = useState(false);
+  const [count, setCount] = useState(5);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    extractPaletteFromUrl(SHOWCASE_PHOTO_URL, 5)
+    setIsLoading(true);
+    extractPaletteFromUrl(SHOWCASE_PHOTO_URL, count)
       .then((result) => {
         if (!cancelled && result.length > 0) setSwatches(result);
       })
       .catch(() => {
-        // Keep the fallback palette if the photo can't be read (e.g. blocked by CORS).
+        if (!cancelled) setSwatches(SHOWCASE_FALLBACK_PALETTE.slice(0, count));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [count]);
 
   return (
-    <div className="ps-reveal mt-12 flex flex-col items-center gap-8 rounded-2xl border border-[var(--ps-line)] bg-white p-6 sm:p-10 md:flex-row">
-      <div className="w-full max-w-xs flex-none -rotate-2 rounded-lg border border-[var(--ps-line)] bg-white p-2 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.25)]">
-        {photoFailed ? (
-          <div className="flex aspect-square w-full items-center justify-center rounded-sm bg-[var(--ps-paper)] text-xs text-[var(--ps-muted)]">
-            Photo unavailable
-          </div>
-        ) : (
-          <img
-            src={SHOWCASE_PHOTO_URL}
-            alt="Beach chairs and an umbrella under palm leaves"
-            className="aspect-square w-full rounded-sm object-cover"
-            onError={() => setPhotoFailed(true)}
-          />
-        )}
-      </div>
-      <ArrowRight className="hidden h-6 w-6 flex-none rotate-90 text-[var(--ps-muted)] md:block md:rotate-0" />
-      <div className="w-full max-w-xs flex-none overflow-hidden rounded-xl border border-[var(--ps-line)]">
-        <div className="flex h-20 overflow-hidden">
-          {swatches.map((s, i) => (
-            <div key={`${s.hex}-${i}`} className="flex-1" style={{ background: s.hex }} />
-          ))}
-        </div>
-        <div className="space-y-2 bg-white p-4">
-          {swatches.map((s, i) => (
-            <div key={`${s.hex}-${i}`} className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2.5">
-                <span className="h-3.5 w-3.5 flex-none rounded-[3px] border border-[var(--ps-line)]" style={{ background: s.hex }} />
-                <span className="font-medium">{s.name}</span>
-              </div>
-              <span className="font-mono text-xs uppercase text-[var(--ps-muted)]">{s.hex}</span>
+    <div className="ps-reveal mt-12 flex flex-col items-center justify-center gap-6">
+      <div className="flex flex-col items-center justify-center gap-8 md:flex-row">
+        <div className="w-full max-w-xs flex-none -rotate-2 rounded-lg border border-[var(--ps-line)] bg-white p-2 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.25)]">
+          {photoFailed ? (
+            <div className="flex aspect-square w-full items-center justify-center rounded-sm bg-[var(--ps-paper)] text-xs text-[var(--ps-muted)]">
+              Photo unavailable
             </div>
-          ))}
+          ) : (
+            <img
+              src={SHOWCASE_PHOTO_URL}
+              alt="Beach chairs and an umbrella under palm leaves"
+              className="aspect-square w-full rounded-sm object-cover"
+              onError={() => setPhotoFailed(true)}
+            />
+          )}
+        </div>
+        <ArrowRight className="hidden h-6 w-6 flex-none rotate-90 text-[var(--ps-muted)] md:block md:rotate-0" />
+        <div className="w-full max-w-xs flex-none overflow-hidden rounded-xl border border-[var(--ps-line)] bg-white">
+          <div className="flex h-20 overflow-hidden">
+            {swatches.map((s, i) => (
+              <div key={`${s.hex}-${i}`} className="flex-1" style={{ background: s.hex }} />
+            ))}
+          </div>
+          <div className="space-y-2 p-4">
+            {swatches.map((s, i) => (
+              <div key={`${s.hex}-${i}`} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-3.5 w-3.5 flex-none rounded-[3px] border border-[var(--ps-line)]" style={{ background: s.hex }} />
+                  <span className="font-medium">{s.name}</span>
+                </div>
+                <span className="font-mono text-xs uppercase text-[var(--ps-muted)]">{s.hex}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+      <ColorCountControl count={count} onChange={setCount} disabled={isLoading} />
     </div>
   );
 }
