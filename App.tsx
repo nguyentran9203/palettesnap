@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Image as ImageIcon, RotateCcw, Sparkles, UploadCloud, Wand2, Download } from "lucide-react";
 import { extractPalette, type Swatch } from "./paletteExtractor";
+import { downloadPaletteAsPng } from "./paletteImage";
+import { generateInstagramTips } from "./instagramTips";
 
 declare global {
   interface Window {
@@ -152,16 +154,12 @@ function Nav() {
   );
 }
 
-function Hero() {
+function usePaletteUpload() {
   const [swatches, setSwatches] = useState<Swatch[]>(demoPalette);
   const [fileName, setFileName] = useState("sunset_rooftop.jpg");
   const [isDemo, setIsDemo] = useState(true);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const openFileDialog = () => fileInputRef.current?.click();
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
@@ -190,6 +188,26 @@ function Hero() {
     setIsDemo(true);
     setStatus("idle");
     setError(null);
+  };
+
+  return { swatches, fileName, isDemo, status, error, setStatus, setError, handleFile, resetToDemo };
+}
+
+type PaletteUpload = ReturnType<typeof usePaletteUpload>;
+
+function Hero({ swatches, fileName, isDemo, status, error, setStatus, setError, handleFile, resetToDemo }: PaletteUpload) {
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openFileDialog = () => fileInputRef.current?.click();
+
+  const handleDownload = async () => {
+    try {
+      await downloadPaletteAsPng(swatches, fileName);
+    } catch (err) {
+      setStatus("error");
+      setError(err instanceof Error ? err.message : "Couldn't create the PNG.");
+    }
   };
 
   return (
@@ -296,6 +314,15 @@ function Hero() {
                     <UploadCloud className="h-4 w-4" />
                     {status === "loading" ? "Reading photo…" : isDemo ? "Upload a photo" : "Upload another"}
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    disabled={status === "loading"}
+                    title="Download palette as PNG"
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--ps-line)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ps-ink)] transition-colors hover:border-[var(--ps-ink)] disabled:opacity-50"
+                  >
+                    <Download className="h-4 w-4" /> PNG
+                  </button>
                   {!isDemo && (
                     <button
                       type="button"
@@ -318,6 +345,37 @@ function Hero() {
             </div>
             <div className="pointer-events-none absolute -right-6 -top-6 hidden h-24 w-24 rotate-12 rounded-xl bg-[var(--ps-citron)]/20 md:block" />
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function InstagramTips({ swatches }: { swatches: Swatch[] }) {
+  const tips = useMemo(() => generateInstagramTips(swatches), [swatches]);
+
+  return (
+    <section id="instagram" className="border-t border-[var(--ps-line)] bg-white">
+      <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
+        <div className="ps-reveal max-w-2xl">
+          <span className="font-mono text-xs uppercase tracking-widest text-[var(--ps-muted)]">Instagram grid</span>
+          <h2 className="font-display mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+            Lay out your feed around this palette.
+          </h2>
+          <p className="mt-4 text-[var(--ps-muted)]">
+            A few ways to arrange posts around these exact colors instead of dropping them in at random.
+          </p>
+        </div>
+        <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2">
+          {tips.map((tip, i) => (
+            <div
+              key={i}
+              className="ps-grid-item flex gap-4 rounded-xl border border-[var(--ps-line)] bg-[var(--ps-paper)] p-5"
+            >
+              <span className="font-mono text-xs text-[var(--ps-muted)]">{String(i + 1).padStart(2, "0")}</span>
+              <p className="text-sm leading-relaxed text-[var(--ps-ink)]">{tip}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -425,12 +483,14 @@ function Footer() {
 function HomePage() {
   useRevealOnMount();
   useScrollReveal();
+  const palette = usePaletteUpload();
 
   return (
     <div className="min-h-screen bg-[var(--ps-paper)]">
       <Nav />
       <main>
-        <Hero />
+        <Hero {...palette} />
+        <InstagramTips swatches={palette.swatches} />
         <HowItWorks />
         <Gallery />
       </main>
