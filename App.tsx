@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { ArrowRight, Check, Image as ImageIcon, Sparkles, Wand2, Download, Mail } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Image as ImageIcon, RotateCcw, Sparkles, UploadCloud, Wand2, Download } from "lucide-react";
+import { extractPalette, type Swatch } from "./paletteExtractor";
 
 declare global {
   interface Window {
@@ -7,8 +8,6 @@ declare global {
     ScrollTrigger?: any;
   }
 }
-
-type Swatch = { hex: string; name: string };
 
 const demoPalette: Swatch[] = [
   { hex: "#2B3A55", name: "Twilight Navy" },
@@ -141,10 +140,9 @@ function Nav() {
         <nav className="hidden items-center gap-8 text-sm text-[var(--ps-muted)] md:flex">
           <a href="#how" className="transition-colors hover:text-[var(--ps-ink)]">How it works</a>
           <a href="#gallery" className="transition-colors hover:text-[var(--ps-ink)]">Gallery</a>
-          <a href="#pricing" className="transition-colors hover:text-[var(--ps-ink)]">Pricing</a>
         </nav>
         <a
-          href="#pricing"
+          href="#top"
           className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ps-ink)] px-4 py-2 text-sm font-medium text-white transition-transform hover:scale-[1.03]"
         >
           Get a palette <ArrowRight className="h-3.5 w-3.5" />
@@ -155,13 +153,52 @@ function Nav() {
 }
 
 function Hero() {
+  const [swatches, setSwatches] = useState<Swatch[]>(demoPalette);
+  const [fileName, setFileName] = useState("sunset_rooftop.jpg");
+  const [isDemo, setIsDemo] = useState(true);
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openFileDialog = () => fileInputRef.current?.click();
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setStatus("error");
+      setError("That doesn't look like an image. Try a JPG, PNG, or WebP.");
+      return;
+    }
+    setStatus("loading");
+    setError(null);
+    try {
+      const extracted = await extractPalette(file, 5);
+      setSwatches(extracted);
+      setFileName(file.name);
+      setIsDemo(false);
+      setStatus("idle");
+    } catch (err) {
+      setStatus("error");
+      setError(err instanceof Error ? err.message : "Something went wrong reading that image.");
+    }
+  };
+
+  const resetToDemo = () => {
+    setSwatches(demoPalette);
+    setFileName("sunset_rooftop.jpg");
+    setIsDemo(true);
+    setStatus("idle");
+    setError(null);
+  };
+
   return (
     <section id="top" className="relative overflow-hidden">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-6 pt-16 pb-20 md:pt-24 md:grid-cols-12 md:gap-8">
         <div className="md:col-span-7">
           <div className="ps-reveal inline-flex items-center gap-2 rounded-full border border-[var(--ps-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--ps-muted)]">
             <Sparkles className="h-3.5 w-3.5 text-[var(--ps-ink)]" />
-            AI-named palettes from any photo
+            Named palettes from any photo
           </div>
           <h1 className="ps-reveal font-display mt-6 text-5xl font-semibold leading-[0.98] tracking-tight sm:text-6xl md:text-7xl">
             Turn a photo into a palette
@@ -173,17 +210,18 @@ function Hero() {
             .
           </h1>
           <p className="ps-reveal mt-7 max-w-md text-lg leading-relaxed text-[var(--ps-muted)]">
-            Drop in any image. PaletteSnap reads the colors that matter, gives
-            each one a memorable name, and hands you a clean export to use in
-            your next design.
+            Drop in any image. PaletteSnap reads the colors that matter and
+            gives each one a memorable name — right in your browser, nothing
+            uploaded anywhere.
           </p>
           <div className="ps-reveal mt-9 flex flex-wrap items-center gap-3">
-            <a
-              href="#pricing"
+            <button
+              type="button"
+              onClick={openFileDialog}
               className="inline-flex items-center gap-2 rounded-full bg-[var(--ps-citron)] px-6 py-3.5 text-sm font-semibold text-[var(--ps-citron-ink)] transition-transform hover:scale-[1.03]"
             >
-              <Wand2 className="h-4 w-4" /> Try it for free
-            </a>
+              <Wand2 className="h-4 w-4" /> Try it now
+            </button>
             <a
               href="#how"
               className="inline-flex items-center gap-2 rounded-full border border-[var(--ps-line)] bg-white px-6 py-3.5 text-sm font-medium text-[var(--ps-ink)] transition-colors hover:border-[var(--ps-ink)]"
@@ -192,31 +230,49 @@ function Hero() {
             </a>
           </div>
           <p className="ps-reveal mt-5 text-xs text-[var(--ps-muted)]">
-            Free preview · One-time $3 export · No subscription
+            Free · No account · No upload leaves your device
           </p>
         </div>
 
-        {/* Demo palette card */}
+        {/* Palette card */}
         <div className="md:col-span-5">
           <div className="ps-reveal relative">
-            <div className="overflow-hidden rounded-2xl border border-[var(--ps-line)] bg-white shadow-[0_24px_60px_-20px_rgba(0,0,0,0.18)]">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                handleFile(e.dataTransfer.files?.[0]);
+              }}
+              className={`overflow-hidden rounded-2xl border bg-white shadow-[0_24px_60px_-20px_rgba(0,0,0,0.18)] transition-colors ${
+                isDragging ? "border-[var(--ps-ink)]" : "border-[var(--ps-line)]"
+              }`}
+            >
               <div className="flex items-center justify-between border-b border-[var(--ps-line)] px-5 py-3.5">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#E0655A]" />
                   <span className="h-2.5 w-2.5 rounded-full bg-[#E8B33A]" />
                   <span className="h-2.5 w-2.5 rounded-full bg-[#4FB06B]" />
                 </div>
-                <span className="font-mono text-[11px] text-[var(--ps-muted)]">sunset_rooftop.jpg</span>
+                <span className="font-mono text-[11px] text-[var(--ps-muted)]">{fileName}</span>
               </div>
               <div className="p-5">
                 <div className="flex h-44 overflow-hidden rounded-lg">
-                  {demoPalette.map((s) => (
-                    <div key={s.hex} className="flex-1 transition-[flex] hover:flex-[1.4]" style={{ background: s.hex }} />
+                  {swatches.map((s, i) => (
+                    <div
+                      key={`${s.hex}-${i}`}
+                      className="flex-1 transition-[flex] hover:flex-[1.4]"
+                      style={{ background: s.hex }}
+                    />
                   ))}
                 </div>
                 <div className="mt-4 space-y-2">
-                  {demoPalette.map((s) => (
-                    <div key={s.hex} className="flex items-center justify-between text-sm">
+                  {swatches.map((s, i) => (
+                    <div key={`${s.hex}-${i}`} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2.5">
                         <span className="h-4 w-4 rounded-[3px] border border-[var(--ps-line)]" style={{ background: s.hex }} />
                         <span className="font-medium">{s.name}</span>
@@ -225,6 +281,39 @@ function Hero() {
                     </div>
                   ))}
                 </div>
+
+                {status === "error" && error && (
+                  <p className="mt-4 text-xs text-[#B04A2E]">{error}</p>
+                )}
+
+                <div className="mt-5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openFileDialog}
+                    disabled={status === "loading"}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-[var(--ps-line)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--ps-ink)] transition-colors hover:border-[var(--ps-ink)] disabled:opacity-50"
+                  >
+                    <UploadCloud className="h-4 w-4" />
+                    {status === "loading" ? "Reading photo…" : isDemo ? "Upload a photo" : "Upload another"}
+                  </button>
+                  {!isDemo && (
+                    <button
+                      type="button"
+                      onClick={resetToDemo}
+                      title="Reset to demo palette"
+                      className="inline-flex items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-medium text-[var(--ps-muted)] transition-colors hover:text-[var(--ps-ink)]"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleFile(e.target.files?.[0])}
+                />
               </div>
             </div>
             <div className="pointer-events-none absolute -right-6 -top-6 hidden h-24 w-24 rotate-12 rounded-xl bg-[var(--ps-citron)]/20 md:block" />
@@ -239,7 +328,7 @@ function HowItWorks() {
   const steps = [
     { n: "01", icon: ImageIcon, title: "Upload any photo", body: "Drag in a screenshot, a picture from your camera roll, or a reference you saved. JPG, PNG, or WebP." },
     { n: "02", icon: Wand2, title: "Get a named palette", body: "We extract the dominant colors and give each a name that actually means something — so you can remember and reuse them." },
-    { n: "03", icon: Download, title: "Export for $3", body: "Grab a one-time export as CSS variables, a Figma-ready swatch set, or a PNG sheet. No account, no recurring fee." },
+    { n: "03", icon: Download, title: "Copy and use it", body: "Grab the hex codes straight off the card and drop them into your next design. Free, no account needed." },
   ];
   return (
     <section id="how" className="border-t border-[var(--ps-line)] bg-white">
@@ -317,113 +406,6 @@ function Gallery() {
   );
 }
 
-function Pricing({ onSubmitted }: { onSubmitted: (email: string) => void }) {
-  const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setSubmitted(true);
-    onSubmitted(email);
-  };
-
-  return (
-    <section id="pricing" className="border-t border-[var(--ps-line)] bg-white">
-      <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
-        <div className="ps-reveal grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-center">
-          {/* Pricing card */}
-          <div className="relative">
-            <div className="overflow-hidden rounded-3xl border border-[var(--ps-ink)] bg-[var(--ps-ink)] p-8 text-white sm:p-10">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs uppercase tracking-widest text-white/50">PaletteSnap Export</span>
-                <span className="rounded-full bg-[var(--ps-citron)] px-3 py-1 text-xs font-semibold text-[var(--ps-citron-ink)]">
-                  One-time
-                </span>
-              </div>
-              <div className="mt-8 flex items-end gap-1">
-                <span className="font-display text-6xl font-semibold tracking-tight">$3</span>
-                <span className="mb-2 text-sm text-white/50">/ palette, paid once</span>
-              </div>
-              <p className="mt-4 text-sm text-white/60">
-                Preview every palette free. Pay once to export the colors you want to keep.
-              </p>
-              <ul className="mt-8 space-y-3 text-sm">
-                {[
-                  "CSS variables, Figma swatches, and PNG export",
-                  "Copy-paste hex, HSL, and Tailwind tokens",
-                  "No account, no subscription, no auto-renewal",
-                ].map((f) => (
-                  <li key={f} className="flex items-start gap-3">
-                    <span className="mt-0.5 grid h-4 w-4 flex-none place-items-center rounded-full bg-[var(--ps-citron)]">
-                      <Check className="h-2.5 w-2.5 text-[var(--ps-citron-ink)]" />
-                    </span>
-                    <span className="text-white/80">{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <a
-                href="#top"
-                className="mt-9 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[var(--ps-citron)] px-6 py-4 text-sm font-semibold text-[var(--ps-citron-ink)] transition-transform hover:scale-[1.02]"
-              >
-                <ImageIcon className="h-4 w-4" /> Start a free palette
-              </a>
-            </div>
-            <div className="pointer-events-none absolute -left-5 -bottom-5 hidden h-28 w-28 rounded-2xl bg-[var(--ps-citron)]/30 md:block" />
-          </div>
-
-          {/* Email capture */}
-          <div className="lg:pl-6">
-            <span className="font-mono text-xs uppercase tracking-widest text-[var(--ps-muted)]">Stay in the loop</span>
-            <h2 className="font-display mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Get the first palette free.
-            </h2>
-            <p className="mt-4 max-w-md text-[var(--ps-muted)]">
-              Drop your email and we'll send you a free export credit plus new
-              features as they ship. One message, then quiet.
-            </p>
-
-            {submitted ? (
-              <div className="mt-8 flex items-center gap-3 rounded-xl border border-[var(--ps-line)] bg-[var(--ps-paper)] px-5 py-4">
-                <span className="grid h-8 w-8 flex-none place-items-center rounded-full bg-[var(--ps-citron)]">
-                  <Check className="h-4 w-4 text-[var(--ps-citron-ink)]" />
-                </span>
-                <div>
-                  <p className="text-sm font-medium">You're on the list.</p>
-                  <p className="text-xs text-[var(--ps-muted)]">Your free export credit is on its way to {email}.</p>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <div className="relative flex-1">
-                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ps-muted)]" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full rounded-full border border-[var(--ps-line)] bg-white py-3.5 pl-11 pr-4 text-sm outline-none transition-colors focus:border-[var(--ps-ink)]"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--ps-ink)] px-6 py-3.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-                >
-                  Claim free export <ArrowRight className="h-4 w-4" />
-                </button>
-              </form>
-            )}
-            <p className="mt-4 text-xs text-[var(--ps-muted)]">
-              We'll only email about PaletteSnap. Unsubscribe anytime.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function Footer() {
   return (
     <footer className="border-t border-[var(--ps-line)] bg-[var(--ps-paper)]">
@@ -443,7 +425,6 @@ function Footer() {
 function HomePage() {
   useRevealOnMount();
   useScrollReveal();
-  const [, setWaitlistEmail] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen bg-[var(--ps-paper)]">
@@ -452,7 +433,6 @@ function HomePage() {
         <Hero />
         <HowItWorks />
         <Gallery />
-        <Pricing onSubmitted={setWaitlistEmail} />
       </main>
       <Footer />
     </div>
