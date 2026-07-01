@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Upload a photo, get an AI-named color palette, and buy a one-time export for $3.">
+  <meta name="author" content="Michii">
+  <link rel="canonical" href="https://palettesnap.michii.dev">
+  <meta property="og:site_name" content="Michii">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://palettesnap.michii.dev">
+  <meta property="og:title" content="PaletteSnap | Michii Preview">
+  <meta property="og:description" content="Upload a photo, get an AI-named color palette, and buy a one-time export for $3.">
+  <meta property="og:image" content="https://michii.dev/michii-logo.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="Michii">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="PaletteSnap | Michii Preview">
+  <meta name="twitter:description" content="Upload a photo, get an AI-named color palette, and buy a one-time export for $3.">
+  <meta name="twitter:image" content="https://michii.dev/michii-logo.png">
+  <meta name="twitter:image:alt" content="Michii">
+  <title>PaletteSnap | Michii</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <iframe
+    src="https://5173-iwahllbt8px6pt65ffhec.e2b.app"
+    title="PaletteSnap"
+    allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone"
+  ></iframe>
+  <script>
+    (function () {
+      var slug = "palettesnap";
+      var previewOrigin = "https://5173-iwahllbt8px6pt65ffhec.e2b.app";
+      // Subdomain access (both {slug}.michii.dev and {slug}-preview.michii.dev,
+      // where the worker proxies every path) maps app routes to the root
+      // ("/lessons"); path-based access keeps the API prefix
+      // ("/api/share/slug/lessons").
+      var basePath =
+        window.location.hostname.endsWith(".michii.dev") ? "" : "/api/share/" + slug;
+      window.addEventListener("message", function (event) {
+        if (!previewOrigin || event.origin !== previewOrigin) return;
+        var data = event.data;
+        if (!data || data.type !== "michii:route" || typeof data.path !== "string") return;
+        // Accept origin-relative paths only ("/x" but never "//x")
+        if (data.path.charAt(0) !== "/" || data.path.charAt(1) === "/") return;
+        try {
+          history.replaceState(null, "", basePath + data.path);
+        } catch (e) {
+          // Best-effort - the preview itself is unaffected
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
