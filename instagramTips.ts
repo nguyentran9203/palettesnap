@@ -32,6 +32,28 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } {
   return { h, s, l };
 }
 
+/**
+ * Orders swatches so visually similar tones sit next to each other instead
+ * of in raw extraction order (which tends to jump between clashing hues).
+ * Near-neutral colors are grouped first (sorted light to dark), then
+ * chromatic colors are grouped by hue family (each also light to dark) —
+ * the same "sort by color family" trick curated feeds use to make a grid
+ * of unrelated photos read as one coherent story.
+ */
+export function sortForCoherentGrid(swatches: Swatch[]): Swatch[] {
+  const NEUTRAL_SATURATION_THRESHOLD = 0.12;
+  const HUE_BUCKET_SIZE = 30;
+
+  return swatches
+    .map((swatch) => {
+      const { h, s, l } = hexToHsl(swatch.hex);
+      const bucket = s < NEUTRAL_SATURATION_THRESHOLD ? -1 : Math.round(h / HUE_BUCKET_SIZE) * HUE_BUCKET_SIZE;
+      return { swatch, bucket, l };
+    })
+    .sort((a, b) => (a.bucket !== b.bucket ? a.bucket - b.bucket : b.l - a.l))
+    .map((entry) => entry.swatch);
+}
+
 export type GridInsights = {
   accent: Swatch;
   muted: Swatch;

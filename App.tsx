@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Image as ImageIcon, RotateCcw, Sparkles, UploadCloud, Wand2, Download } from "lucide-react";
 import { extractPalette, extractPaletteFromUrl, type Swatch } from "./paletteExtractor";
 import { downloadPaletteAsPng } from "./paletteImage";
-import { getGridInsights } from "./instagramTips";
+import { getGridInsights, sortForCoherentGrid } from "./instagramTips";
 
 declare global {
   interface Window {
@@ -432,7 +432,8 @@ function Hero({
 
 function InstagramGridPreview({ swatches }: { swatches: Swatch[] }) {
   const insights = useMemo(() => getGridInsights(swatches), [swatches]);
-  const tiles = useMemo(() => Array.from({ length: 9 }, (_, i) => swatches[i] ?? null), [swatches]);
+  const ordered = useMemo(() => sortForCoherentGrid(swatches), [swatches]);
+  const tiles = useMemo(() => Array.from({ length: 9 }, (_, i) => ordered[i] ?? null), [ordered]);
 
   return (
     <section id="instagram" className="border-t border-[var(--ps-line)] bg-white">
@@ -460,8 +461,9 @@ function InstagramGridPreview({ swatches }: { swatches: Swatch[] }) {
               {insights?.caption ?? "Upload a photo above to see a suggested grid built from its colors."}
             </p>
             <p className="mt-4 text-sm text-[var(--ps-muted)]">
-              The colored tiles above are seeded straight from your palette — the rest of
-              the grid stays open for the photos you actually post.
+              Tiles are grouped by color family and sorted light to dark within each
+              group — so the grid reads as one smooth story instead of jumping between
+              clashing tones. The rest stays open for the photos you actually post.
             </p>
           </div>
         </div>
