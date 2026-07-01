@@ -126,3 +126,25 @@ export async function extractPaletteFromUrl(url: string, count = 5): Promise<Swa
   const img = await loadImageFromUrl(url);
   return extractPaletteFromImage(img, count);
 }
+
+/**
+ * Reads the exact pixel color at a normalized (0-1, 0-1) point in an image
+ * file, so a user can click a specific spot on their photo instead of
+ * relying only on automatic dominant-color extraction.
+ */
+export async function sampleColorAtPoint(file: File, xRatio: number, yRatio: number): Promise<Swatch> {
+  const img = await loadImageFromFile(file);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas is not supported in this browser.");
+  ctx.drawImage(img, 0, 0);
+
+  const x = Math.min(canvas.width - 1, Math.max(0, Math.round(xRatio * canvas.width)));
+  const y = Math.min(canvas.height - 1, Math.max(0, Math.round(yRatio * canvas.height)));
+  const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
+  const hex = rgbToHex(r, g, b);
+  return { hex, name: nearestColorName(hex) };
+}
