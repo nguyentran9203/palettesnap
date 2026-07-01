@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Image as ImageIcon, RotateCcw, Sparkles, UploadCloud, Wand2, Download } from "lucide-react";
-import { extractPalette, extractPaletteFromUrl, type Swatch } from "./paletteExtractor";
+import { extractPalette, extractPaletteFromUrl, sampleColorAtPoint, type Swatch } from "./paletteExtractor";
 import { downloadPaletteAsPng } from "./paletteImage";
 import { getGridInsights, sortForCoherentGrid } from "./instagramTips";
 
@@ -157,6 +157,10 @@ function Nav() {
 const MIN_COLOR_COUNT = 3;
 const MAX_COLOR_COUNT = 8;
 
+type PickPoint = { x: number; y: number } | null;
+
+const PICK_REMOVE_RADIUS = 0.04;
+
 function usePaletteUpload() {
   const [swatches, setSwatches] = useState<Swatch[]>(demoPalette);
   const [fileName, setFileName] = useState("sunset_rooftop.jpg");
@@ -164,6 +168,8 @@ function usePaletteUpload() {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [count, setCount] = useState(5);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [pickPoints, setPickPoints] = useState<PickPoint[]>(Array(5).fill(null));
   const lastFileRef = useRef<File | null>(null);
 
   const handleFile = async (file: File | undefined) => {
@@ -179,8 +185,13 @@ function usePaletteUpload() {
     try {
       const extracted = await extractPalette(file, count);
       setSwatches(extracted);
+      setPickPoints(Array(extracted.length).fill(null));
       setFileName(file.name);
       setIsDemo(false);
+      setPhotoUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
       setStatus("idle");
     } catch (err) {
       setStatus("error");
@@ -193,6 +204,7 @@ function usePaletteUpload() {
     setCount(clamped);
     if (!lastFileRef.current) {
       setSwatches(demoPalette.slice(0, clamped));
+      setPickPoints(Array(Math.min(clamped, demoPalette.length)).fill(null));
       return;
     }
     setStatus("loading");
@@ -200,6 +212,7 @@ function usePaletteUpload() {
     try {
       const extracted = await extractPalette(lastFileRef.current, clamped);
       setSwatches(extracted);
+      setPickPoints(Array(extracted.length).fill(null));
       setStatus("idle");
     } catch (err) {
       setStatus("error");
@@ -207,16 +220,64 @@ function usePaletteUpload() {
     }
   };
 
+  /** Samples the exact pixel a user clicked on their photo, adding it as a new
+   * swatch — or removes an existing pick if they click that marker again. */
+  const pickColorAtPoint = async (xRatio: number, yRatio: number) => {
+    if (!lastFileRef.current || status === "loading") return;
+
+    const existingIndex = pickPoints.findIndex(
+      (p) => p && Math.hypot(p.x - xRatio, p.y - yRatio) < PICK_REMOVE_RADIUS
+    );
+    if (existingIndex !== -1) {
+      if (swatches.length <= 1) return;
+      setSwatches((prev) => prev.filter((_, i) => i !== existingIndex));
+      setPickPoints((prev) => prev.filter((_, i) => i !== existingIndex));
+      setCount((c) => Math.max(MIN_COLOR_COUNT, c - 1));
+      return;
+    }
+
+    if (swatches.length >= MAX_COLOR_COUNT) return;
+    try {
+      const swatch = await sampleColorAtPoint(lastFileRef.current, xRatio, yRatio);
+      setSwatches((prev) => [...prev, swatch]);
+      setPickPoints((prev) => [...prev, { x: xRatio, y: yRatio }]);
+      setCount((c) => Math.min(MAX_COLOR_COUNT, c + 1));
+    } catch (err) {
+      setStatus("error");
+      setError(err instanceof Error ? err.message : "Couldn't sample that spot.");
+    }
+  };
+
   const resetToDemo = () => {
     lastFileRef.current = null;
     setSwatches(demoPalette.slice(0, count));
+    setPickPoints(Array(Math.min(count, demoPalette.length)).fill(null));
     setFileName("sunset_rooftop.jpg");
     setIsDemo(true);
     setStatus("idle");
     setError(null);
+    setPhotoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
   };
 
-  return { swatches, fileName, isDemo, status, error, count, setStatus, setError, handleFile, setColorCount, resetToDemo };
+  return {
+    swatches,
+    fileName,
+    isDemo,
+    status,
+    error,
+    count,
+    photoUrl,
+    pickPoints,
+    setStatus,
+    setError,
+    handleFile,
+    setColorCount,
+    pickColorAtPoint,
+    resetToDemo,
+  };
 }
 
 type PaletteUpload = ReturnType<typeof usePaletteUpload>;
@@ -265,13 +326,17 @@ function Hero({
   status,
   error,
   count,
+  photoUrl,
+  pickPoints,
   setStatus,
   setError,
   handleFile,
   setColorCount,
+  pickColorAtPoint,
   resetToDemo,
 }: PaletteUpload) {
   const [isDragging, setIsDragging] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openFileDialog = () => fileInputRef.current?.click();
@@ -284,6 +349,17 @@ function Hero({
       setError(err instanceof Error ? err.message : "Couldn't create the PNG.");
     }
   };
+
+  const handlePhotoClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xRatio = (e.clientX - rect.left) / rect.width;
+    const yRatio = (e.clientY - rect.top) / rect.height;
+    pickColorAtPoint(xRatio, yRatio);
+  };
+
+  useEffect(() => {
+    if (isDemo) setShowPicker(false);
+  }, [isDemo]);
 
   return (
     <section id="top" className="relative overflow-hidden">
@@ -375,9 +451,49 @@ function Hero({
                   ))}
                 </div>
 
-                <div className="mt-4 flex items-center justify-end">
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  {!isDemo ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowPicker((v) => !v)}
+                      className="text-xs font-medium text-[var(--ps-ink)] underline decoration-[var(--ps-citron)] decoration-2 underline-offset-2 hover:text-[var(--ps-muted)]"
+                    >
+                      {showPicker ? "Hide photo picker" : "Pick colors from the photo"}
+                    </button>
+                  ) : (
+                    <span />
+                  )}
                   <ColorCountControl count={count} onChange={setColorCount} disabled={status === "loading"} />
                 </div>
+
+                {showPicker && photoUrl && (
+                  <div className="mt-4">
+                    <div className="relative overflow-hidden rounded-lg border border-[var(--ps-line)]">
+                      <img
+                        src={photoUrl}
+                        alt="Your uploaded photo"
+                        onClick={handlePhotoClick}
+                        className="block w-full cursor-crosshair select-none"
+                      />
+                      {pickPoints.map(
+                        (p, i) =>
+                          p && (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => pickColorAtPoint(p.x, p.y)}
+                              title={`${swatches[i]?.name ?? ""} — click to remove`}
+                              style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, background: swatches[i]?.hex }}
+                              className="absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+                            />
+                          )
+                      )}
+                    </div>
+                    <p className="mt-2 text-xs text-[var(--ps-muted)]">
+                      Click anywhere on the photo to sample that exact color. Click a marker to remove it.
+                    </p>
+                  </div>
+                )}
 
                 {status === "error" && error && (
                   <p className="mt-4 text-xs text-[#B04A2E]">{error}</p>
